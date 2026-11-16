@@ -1,0 +1,162 @@
+{
+  "collectedAt": "2026-11-01T00:00:00Z",
+  "users": [
+    {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "userPrincipalName": "ada.admin@contoso.test",
+      "displayName": "Ada Admin",
+      "userType": "Member",
+      "accountEnabled": true,
+      "createdDateTime": "2025-09-01T08:00:00Z",
+      "assignedLicenses": [ { "skuId": "eec0eb4f-6444-4f95-aba0-50c24d67f998", "disabledPlans": [] } ],
+      "signInActivity": {
+        "lastSignInDateTime": "2026-10-30T07:45:00Z",
+        "lastNonInteractiveSignInDateTime": "2026-10-31T21:10:00Z",
+        "lastSuccessfulSignInDateTime": "2026-10-30T07:45:00Z"
+      }
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "userPrincipalName": "hank.helpdesk@contoso.test",
+      "displayName": "Hank Helpdesk",
+      "userType": "Member",
+      "accountEnabled": true,
+      "createdDateTime": "2026-02-14T10:00:00Z",
+      "assignedLicenses": [ { "skuId": "eec0eb4f-6444-4f95-aba0-50c24d67f998", "disabledPlans": [] } ],
+      "signInActivity": {
+        "lastSignInDateTime": "2026-10-29T12:00:00Z",
+        "lastNonInteractiveSignInDateTime": null,
+        "lastSuccessfulSignInDateTime": "2026-10-29T12:00:00Z"
+      }
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000003",
+      "userPrincipalName": "bob.member@contoso.test",
+      "displayName": "Bob Member",
+      "userType": "Member",
+      "accountEnabled": true,
+      "createdDateTime": "2026-01-10T09:00:00Z",
+      "assignedLicenses": [ { "skuId": "eec0eb4f-6444-4f95-aba0-50c24d67f998", "disabledPlans": [] } ],
+      "signInActivity": {
+        "lastSignInDateTime": "2026-10-20T08:30:00Z",
+        "lastNonInteractiveSignInDateTime": "2026-10-21T08:30:00Z",
+        "lastSuccessfulSignInDateTime": "2026-10-20T08:30:00Z"
+      }
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000004",
+      "userPrincipalName": "carol.dormant@contoso.test",
+      "displayName": "Carol Dormant",
+      "userType": "Member",
+      "accountEnabled": true,
+      "createdDateTime": "2025-11-03T09:00:00Z",
+      "assignedLicenses": [ { "skuId": "eec0eb4f-6444-4f95-aba0-50c24d67f998", "disabledPlans": [] } ],
+      "signInActivity": {
+        "lastSignInDateTime": "2026-05-10T09:15:00Z",
+        "lastNonInteractiveSignInDateTime": "2026-05-10T09:20:00Z",
+        "lastSuccessfulSignInDateTime": "2026-05-10T09:15:00Z"
+      }
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000005",
+      "userPrincipalName": "dave.leaver@contoso.test",
+      "displayName": "Dave Leaver",
+      "userType": "Member",
+      "accountEnabled": false,
+      "createdDateTime": "2025-10-01T09:00:00Z",
+      "assignedLicenses": [ { "skuId": "eec0eb4f-6444-4f95-aba0-50c24d67f998", "disabledPlans": [] } ],
+      "signInActivity": {
+        "lastSignInDateTime": "2026-03-02T16:00:00Z",
+        "lastNonInteractiveSignInDateTime": null,
+        "lastSuccessfulSignInDateTime": "2026-03-02T16:00:00Z"
+      }
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000006",
+      "userPrincipalName": "erin.neverused@contoso.test",
+      "displayName": "Erin Neverused",
+      "userType": "Member",
+      "accountEnabled": true,
+      "createdDateTime": "2026-03-01T09:00:00Z",
+      "assignedLicenses": [ { "skuId": "eec0eb4f-6444-4f95-aba0-50c24d67f998", "disabledPlans": [] } ],
+      "signInActivity": null
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000007",
+      "userPrincipalName": "frank.newhire@contoso.test",
+      "displayName": "Frank Newhire",
+      "userType": "Member",
+      "accountEnabled": true,
+      "createdDateTime": "2026-10-25T09:00:00Z",
+      "assignedLicenses": [ { "skuId": "eec0eb4f-6444-4f95-aba0-50c24d67f998", "disabledPlans": [] } ],
+      "signInActivity": null
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000008",
+      "userPrincipalName": "gina_partner.test#EXT#@contoso.test",
+      "displayName": "Gina (Partner)",
+      "userType": "Guest",
+      "accountEnabled": true,
+      "createdDateTime": "2026-06-01T09:00:00Z",
+      "assignedLicenses": [],
+      "signInActivity": {
+        "lastSignInDateTime": "2026-10-15T10:00:00Z",
+        "lastNonInteractiveSignInDateTime": null,
+        "lastSuccessfulSignInDateTime": "2026-10-15T10:00:00Z"
+      }
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000009",
+      "userPrincipalName": "ivy.service@contoso.test",
+      "displayName": "Ivy Service",
+      "userType": "Member",
+      "accountEnabled": true,
+      "createdDateTime": "2025-08-01T09:00:00Z",
+      "assignedLicenses": [ { "skuId": "eec0eb4f-6444-4f95-aba0-50c24d67f998", "disabledPlans": [] } ],
+      "signInActivity": {
+        "lastSignInDateTime": "2026-04-02T09:00:00Z",
+        "lastNonInteractiveSignInDateTime": "2026-10-28T03:00:00Z",
+        "lastSuccessfulSignInDateTime": null
+      }
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000010",
+      "userPrincipalName": "jack.justcreated@contoso.test",
+      "displayName": "Jack Justcreated",
+      "userType": "Member",
+      "accountEnabled": true,
+      "createdDateTime": "2026-10-31T15:00:00Z",
+      "assignedLicenses": [],
+      "signInActivity": null
+    }
+  ],
+  "registrationDetails": [
+    { "id": "00000000-0000-0000-0000-000000000001", "userPrincipalName": "ada.admin@contoso.test", "userDisplayName": "Ada Admin", "userType": "member", "isAdmin": true, "isMfaCapable": true, "isMfaRegistered": true, "isSsprRegistered": true, "methodsRegistered": [ "microsoftAuthenticatorPush", "softwareOneTimePasscode" ], "lastUpdatedDateTime": "2026-10-31T23:00:00Z" },
+    { "id": "00000000-0000-0000-0000-000000000002", "userPrincipalName": "hank.helpdesk@contoso.test", "userDisplayName": "Hank Helpdesk", "userType": "member", "isAdmin": true, "isMfaCapable": false, "isMfaRegistered": false, "isSsprRegistered": false, "methodsRegistered": [], "lastUpdatedDateTime": "2026-10-31T23:00:00Z" },
+    { "id": "00000000-0000-0000-0000-000000000003", "userPrincipalName": "bob.member@contoso.test", "userDisplayName": "Bob Member", "userType": "member", "isAdmin": false, "isMfaCapable": false, "isMfaRegistered": false, "isSsprRegistered": false, "methodsRegistered": [], "lastUpdatedDateTime": "2026-10-31T23:00:00Z" },
+    { "id": "00000000-0000-0000-0000-000000000004", "userPrincipalName": "carol.dormant@contoso.test", "userDisplayName": "Carol Dormant", "userType": "member", "isAdmin": false, "isMfaCapable": true, "isMfaRegistered": true, "isSsprRegistered": true, "methodsRegistered": [ "microsoftAuthenticatorPush" ], "lastUpdatedDateTime": "2026-10-31T23:00:00Z" },
+    { "id": "00000000-0000-0000-0000-000000000005", "userPrincipalName": "dave.leaver@contoso.test", "userDisplayName": "Dave Leaver", "userType": "member", "isAdmin": false, "isMfaCapable": false, "isMfaRegistered": false, "isSsprRegistered": false, "methodsRegistered": [], "lastUpdatedDateTime": "2026-10-31T23:00:00Z" },
+    { "id": "00000000-0000-0000-0000-000000000006", "userPrincipalName": "erin.neverused@contoso.test", "userDisplayName": "Erin Neverused", "userType": "member", "isAdmin": false, "isMfaCapable": false, "isMfaRegistered": false, "isSsprRegistered": false, "methodsRegistered": [], "lastUpdatedDateTime": "2026-10-31T23:00:00Z" },
+    { "id": "00000000-0000-0000-0000-000000000007", "userPrincipalName": "frank.newhire@contoso.test", "userDisplayName": "Frank Newhire", "userType": "member", "isAdmin": false, "isMfaCapable": false, "isMfaRegistered": false, "isSsprRegistered": false, "methodsRegistered": [], "lastUpdatedDateTime": "2026-10-31T23:00:00Z" },
+    { "id": "00000000-0000-0000-0000-000000000008", "userPrincipalName": "gina_partner.test#EXT#@contoso.test", "userDisplayName": "Gina (Partner)", "userType": "guest", "isAdmin": false, "isMfaCapable": false, "isMfaRegistered": false, "isSsprRegistered": false, "methodsRegistered": [], "lastUpdatedDateTime": "2026-10-31T23:00:00Z" },
+    { "id": "00000000-0000-0000-0000-000000000009", "userPrincipalName": "ivy.service@contoso.test", "userDisplayName": "Ivy Service", "userType": "member", "isAdmin": false, "isMfaCapable": true, "isMfaRegistered": true, "isSsprRegistered": false, "methodsRegistered": [ "softwareOneTimePasscode" ], "lastUpdatedDateTime": "2026-10-31T23:00:00Z" }
+  ],
+  "subscribedSkus": [
+    {
+      "skuId": "eec0eb4f-6444-4f95-aba0-50c24d67f998",
+      "skuPartNumber": "AAD_PREMIUM_P2",
+      "appliesTo": "User",
+      "capabilityStatus": "Enabled",
+      "consumedUnits": 8,
+      "prepaidUnits": { "enabled": 100, "suspended": 0, "warning": 0, "lockedOut": 0 }
+    },
+    {
+      "skuId": "f30db892-07e9-47e9-837c-80727f46fd3d",
+      "skuPartNumber": "FLOW_FREE",
+      "appliesTo": "User",
+      "capabilityStatus": "Enabled",
+      "consumedUnits": 0,
+      "prepaidUnits": { "enabled": 10000, "suspended": 0, "warning": 0, "lockedOut": 0 }
+    }
+  ]
+}

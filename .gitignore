@@ -1,0 +1,9 @@
+# Reports and live snapshots contain real tenant data
+out/
+*.snapshot.json
+
+# Test output
+testResults.xml
+coverage.xml
+
+.DS_Store

@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Lint and test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Pester and PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force -SkipPublisherCheck
+          Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force
+
+      - name: Lint
+        shell: pwsh
+        run: |
+          $issues = foreach ($path in './src', './setup', './run.ps1') {
+              Invoke-ScriptAnalyzer -Path $path -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
+          }
+          $issues | Format-Table RuleName, Severity, ScriptName, Line, Message -AutoSize -Wrap
+          if ($issues) { throw "PSScriptAnalyzer reported $(@($issues).Count) issue(s)." }
+
+      - name: Test
+        shell: pwsh
+        run: |
+          $config = New-PesterConfiguration
+          $config.Run.Path = './tests'
+          $config.Run.Exit = $true
+          $config.Output.Verbosity = 'Detailed'
+          $config.TestResult.Enabled = $true
+          $config.TestResult.OutputPath = 'testResults.xml'
+          $config.CodeCoverage.Enabled = $true
+          $config.CodeCoverage.Path = './src'
+          Invoke-Pester -Configuration $config
+
+      - name: Build the demo report from the fixtures
+        if: always()
+        shell: pwsh
+        run: ./run.ps1 -SnapshotPath ./tests/fixtures/snapshot.json -OutputPath ./out
+
+      - name: Upload report and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: health-report-${{ matrix.os }}
+          path: |
+            out/
+            testResults.xml
+            coverage.xml
