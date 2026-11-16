@@ -6,11 +6,14 @@
     Two modes:
       -SnapshotPath  read a saved snapshot (no tenant, no Graph SDK needed) - used for the demo and in CI
       -Connect       sign in interactively and read the live tenant (read-only scopes)
+                     add -NoPremium on Entra ID Free (no P1/P2): MFA is read per user, inactivity is skipped
     Exits with code 1 when a finding reaches -FailOn, so the script can gate a scheduled pipeline.
 .EXAMPLE
     ./run.ps1 -SnapshotPath ./tests/fixtures/snapshot.json
 .EXAMPLE
     ./run.ps1 -Connect -FailOn High
+.EXAMPLE
+    ./run.ps1 -Connect -NoPremium
 .EXAMPLE
     ./run.ps1 -Connect -SaveSnapshotPath ./out/tenant.snapshot.json
 #>
@@ -21,6 +24,9 @@ param(
 
     [Parameter(ParameterSetName = 'Live')]
     [switch]$Connect,
+
+    [Parameter(ParameterSetName = 'Live')]
+    [switch]$NoPremium,
 
     [Parameter(ParameterSetName = 'Live')]
     [string]$SaveSnapshotPath,
@@ -45,9 +51,15 @@ if ($PSCmdlet.ParameterSetName -eq 'Offline') {
 else {
     if ($Connect) {
         Import-Module Microsoft.Graph.Authentication
-        Connect-MgGraph -Scopes 'User.Read.All', 'AuditLog.Read.All', 'Organization.Read.All' -NoWelcome
+        $scopes = if ($NoPremium) {
+            'User.Read.All', 'UserAuthenticationMethod.Read.All', 'RoleManagement.Read.Directory', 'Organization.Read.All'
+        }
+        else {
+            'User.Read.All', 'AuditLog.Read.All', 'Organization.Read.All'
+        }
+        Connect-MgGraph -Scopes $scopes -NoWelcome
     }
-    $snapshot = Get-M365TenantSnapshot
+    $snapshot = Get-M365TenantSnapshot -NoPremium:$NoPremium
     if ($SaveSnapshotPath) {
         # Contains real names and addresses: keep it out of git (out/ and *.snapshot.json are ignored).
         $snapshot | ConvertTo-Json -Depth 10 | Set-Content -Path $SaveSnapshotPath -Encoding utf8

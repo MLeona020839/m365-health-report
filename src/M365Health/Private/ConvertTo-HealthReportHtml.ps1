@@ -15,7 +15,10 @@ function ConvertTo-HealthReportHtml {
         [datetime]$AsOf,
 
         [Parameter(Mandatory)]
-        [int]$InactiveDays
+        [int]$InactiveDays,
+
+        [AllowEmptyCollection()]
+        [string[]]$Notes = @()
     )
 
     function Get-Encoded([object]$Value) {
@@ -42,6 +45,7 @@ function ConvertTo-HealthReportHtml {
     }
 
     $generated = $AsOf.ToString('yyyy-MM-dd HH:mm', [System.Globalization.CultureInfo]::InvariantCulture)
+    $noteHtml = ($Notes | ForEach-Object { "  <p class=""note"">$(Get-Encoded $_)</p>" }) -join [Environment]::NewLine
 
     @"
 <!doctype html>
@@ -74,6 +78,7 @@ function ConvertTo-HealthReportHtml {
   .badge { font-weight: 600; }
   .badge.high { color: var(--high); } .badge.medium { color: var(--medium); } .badge.low { color: var(--low); }
   .empty { color: var(--muted); text-align: center; padding: 24px; }
+  .note { margin: -8px 0 20px; padding: 8px 12px; border-left: 3px solid var(--medium); background: var(--card); }
   code { font-size: 12px; }
 </style>
 </head>
@@ -81,6 +86,7 @@ function ConvertTo-HealthReportHtml {
 <main>
   <h1>Microsoft 365 health report</h1>
   <p class="meta">Data collected $generated UTC &middot; inactivity threshold $InactiveDays days &middot; $($Findings.Count) finding(s)</p>
+$noteHtml
   <section class="summary">
     <div class="tile high"><b>$($count.High)</b>High</div>
     <div class="tile medium"><b>$($count.Medium)</b>Medium</div>

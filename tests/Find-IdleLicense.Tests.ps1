@@ -113,4 +113,12 @@ Describe 'Find-IdleLicense' {
     It 'returns exactly the expected set for the fixture tenant' {
         $findings.Count | Should -Be 4
     }
+
+    It 'with -SkipSignInChecks keeps seat and disabled-account checks but drops sign-in based ones' {
+        $checks = @(Find-IdleLicense -Users $snapshot.users -SubscribedSkus $snapshot.subscribedSkus -AsOf $asOf -SkipSignInChecks).Check
+        $checks | Should -Contain 'UnassignedLicenses'
+        $checks | Should -Contain 'LicensedDisabledAccount'
+        $checks | Should -Not -Contain 'LicensedInactive'
+        $checks | Should -Not -Contain 'LicensedNeverSignedIn'
+    }
 }

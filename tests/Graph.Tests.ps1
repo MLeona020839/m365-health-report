@@ -1,23 +1,12 @@
 BeforeAll {
-    # The tests must run without the Microsoft Graph SDK installed (CI has no tenant and no SDK).
-    # Pester can only mock commands that exist, so define empty stand-ins when the SDK is absent.
-    $script:createdStubs = @()
-    if (-not (Get-Command Invoke-MgGraphRequest -ErrorAction SilentlyContinue)) {
-        function global:Invoke-MgGraphRequest { [CmdletBinding()] param($Method, $Uri, $OutputType) }
-        $script:createdStubs += 'Invoke-MgGraphRequest'
-    }
-    if (-not (Get-Command Get-MgContext -ErrorAction SilentlyContinue)) {
-        function global:Get-MgContext { [CmdletBinding()] param() }
-        $script:createdStubs += 'Get-MgContext'
-    }
+    . (Join-Path $PSScriptRoot 'GraphStubs.ps1')
+    $script:createdStubs = Add-GraphStubs
 
     Import-Module (Join-Path $PSScriptRoot '../src/M365Health/M365Health.psd1') -Force
 }
 
 AfterAll {
-    foreach ($name in $script:createdStubs) {
-        Remove-Item -Path "function:global:$name" -ErrorAction SilentlyContinue
-    }
+    Remove-GraphStubs $script:createdStubs
 }
 
 Describe 'Invoke-GraphCollection' {
@@ -67,6 +56,99 @@ Describe 'Get-M365TenantSnapshot' {
 
         Should -Invoke Invoke-MgGraphRequest -ModuleName M365Health -Times 3 -Exactly -ParameterFilter { $Method -eq 'GET' }
         Should -Invoke Invoke-MgGraphRequest -ModuleName M365Health -Times 0 -Exactly -ParameterFilter { $Method -ne 'GET' }
+    }
+}
+
+Describe 'Get-M365TenantSnapshot -NoPremium (Entra ID Free)' {
+    BeforeAll {
+        Mock Get-MgContext -ModuleName M365Health { [pscustomobject]@{ TenantId = 'test' } }
+        Mock Invoke-GraphCollection -ModuleName M365Health -ParameterFilter { $Uri -like 'v1.0/users?*' } {
+            [pscustomobject]@{ id = 'u-admin'; userPrincipalName = 'admin@contoso.test'; userType = 'Member'; accountEnabled = $true }
+            [pscustomobject]@{ id = 'u-mfa'; userPrincipalName = 'mfa@contoso.test'; userType = 'Member'; accountEnabled = $true }
+            [pscustomobject]@{ id = 'u-off'; userPrincipalName = 'off@contoso.test'; userType = 'Member'; accountEnabled = $false }
+        }
+        Mock Invoke-GraphCollection -ModuleName M365Health -ParameterFilter { $Uri -like '*roleAssignments*' } {
+            [pscustomobject]@{ principalId = 'u-admin' }
+        }
+        Mock Invoke-GraphCollection -ModuleName M365Health -ParameterFilter { $Uri -eq 'v1.0/users/u-admin/authentication/methods' } {
+            [pscustomobject]@{ '@odata.type' = '#microsoft.graph.passwordAuthenticationMethod' }
+        }
+        Mock Invoke-GraphCollection -ModuleName M365Health -ParameterFilter { $Uri -eq 'v1.0/users/u-mfa/authentication/methods' } {
+            [pscustomobject]@{ '@odata.type' = '#microsoft.graph.passwordAuthenticationMethod' }
+            [pscustomobject]@{ '@odata.type' = '#microsoft.graph.microsoftAuthenticatorAuthenticationMethod' }
+        }
+        Mock Invoke-GraphCollection -ModuleName M365Health -ParameterFilter { $Uri -eq 'v1.0/subscribedSkus' } { }
+
+        $result = Get-M365TenantSnapshot -NoPremium
+        $rowFor = { param($id) $result.RegistrationDetails | Where-Object id -EQ $id }
+    }
+
+    It 'does not ask for sign-in activity, and says so in the snapshot' {
+        Should -Invoke Invoke-GraphCollection -ModuleName M365Health -Times 0 -ParameterFilter { $Uri -like '*signInActivity*' }
+        $result.SignInActivityAvailable | Should -BeFalse
+        $result.Source | Should -Be 'AuthenticationMethods'
+    }
+
+    It 'marks users with an MFA method as registered and password-only users as not' {
+        (& $rowFor 'u-mfa').isMfaRegistered | Should -BeTrue
+        (& $rowFor 'u-admin').isMfaRegistered | Should -BeFalse
+    }
+
+    It 'finds admins through directory role assignments' {
+        (& $rowFor 'u-admin').isAdmin | Should -BeTrue
+        (& $rowFor 'u-mfa').isAdmin | Should -BeFalse
+    }
+
+    It 'does not spend requests on disabled accounts' {
+        Should -Invoke Invoke-GraphCollection -ModuleName M365Health -Times 0 -ParameterFilter { $Uri -like 'v1.0/users/u-off/*' }
+        & $rowFor 'u-off' | Should -BeNullOrEmpty
+    }
+}
+
+Describe 'Get-M365TenantSnapshot on a tenant without P1/P2' {
+    It 'explains that -NoPremium is needed' {
+        Mock Get-MgContext -ModuleName M365Health { [pscustomobject]@{ TenantId = 'test' } }
+        Mock Invoke-GraphCollection -ModuleName M365Health {
+            throw "Neither tenant is B2C or tenant doesn't have premium license"
+        }
+        { Get-M365TenantSnapshot } | Should -Throw '*-NoPremium*'
+    }
+
+    It 'passes other errors through unchanged' {
+        Mock Get-MgContext -ModuleName M365Health { [pscustomobject]@{ TenantId = 'test' } }
+        Mock Invoke-GraphCollection -ModuleName M365Health { throw 'Insufficient privileges to complete the operation.' }
+        { Get-M365TenantSnapshot } | Should -Throw 'Insufficient privileges*'
+    }
+}
+
+Describe 'ConvertTo-RegistrationDetail' {
+    It 'treats <Type> as <Expected>' -ForEach @(
+        @{ Type = 'microsoftAuthenticatorAuthenticationMethod'; Expected = 'MFA' }
+        @{ Type = 'phoneAuthenticationMethod'; Expected = 'MFA' }
+        @{ Type = 'fido2AuthenticationMethod'; Expected = 'MFA' }
+        @{ Type = 'softwareOathAuthenticationMethod'; Expected = 'MFA' }
+        @{ Type = 'windowsHelloForBusinessAuthenticationMethod'; Expected = 'MFA' }
+        @{ Type = 'passwordAuthenticationMethod'; Expected = 'not MFA' }
+        @{ Type = 'emailAuthenticationMethod'; Expected = 'not MFA' }
+        @{ Type = 'temporaryAccessPassAuthenticationMethod'; Expected = 'not MFA' }
+    ) {
+        $row = InModuleScope M365Health -Parameters @{ Type = $Type } {
+            param($Type)
+            ConvertTo-RegistrationDetail -User ([pscustomobject]@{ id = '1' }) -Methods @(
+                [pscustomobject]@{ '@odata.type' = "#microsoft.graph.$Type" }
+            )
+        }
+        $row.isMfaRegistered | Should -Be ($Expected -eq 'MFA')
+    }
+
+    It 'lists methods by short name' {
+        $row = InModuleScope M365Health {
+            ConvertTo-RegistrationDetail -User ([pscustomobject]@{ id = '1' }) -Methods @(
+                [pscustomobject]@{ '@odata.type' = '#microsoft.graph.passwordAuthenticationMethod' }
+                [pscustomobject]@{ '@odata.type' = '#microsoft.graph.fido2AuthenticationMethod' }
+            )
+        }
+        $row.methodsRegistered | Should -Be @('password', 'fido2')
     }
 }
 

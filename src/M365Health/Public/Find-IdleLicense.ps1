@@ -13,6 +13,9 @@ function Find-IdleLicense {
 
         Free self-service SKUs (-IgnoreSkuPartNumber) are skipped because they always show thousands of
         "unassigned" seats. SKUs that are suspended or deleted are skipped as well.
+
+        -SkipSignInChecks drops the two sign-in based checks. Use it when sign-in activity was not
+        collected (Entra ID Free); otherwise every licensed account would look like it never signed in.
     .PARAMETER AsOf
         Reference time for inactivity. Defaults to now; Invoke-M365HealthCheck passes the snapshot's
         collection time so that results for a saved snapshot never change.
@@ -35,7 +38,9 @@ function Find-IdleLicense {
 
         [datetime]$AsOf = (Get-Date).ToUniversalTime(),
 
-        [string[]]$IgnoreSkuPartNumber = @('FLOW_FREE', 'POWER_BI_STANDARD', 'POWERAPPS_VIRAL', 'WINDOWS_STORE')
+        [string[]]$IgnoreSkuPartNumber = @('FLOW_FREE', 'POWER_BI_STANDARD', 'POWERAPPS_VIRAL', 'WINDOWS_STORE'),
+
+        [switch]$SkipSignInChecks
     )
 
     $asOfUtc = ConvertTo-UtcDateTime $AsOf
@@ -76,6 +81,8 @@ function Find-IdleLicense {
                 -Detail "Account is disabled but still holds: $skuNames."
             continue
         }
+
+        if ($SkipSignInChecks) { continue }
 
         $lastSignIn = Get-LastSignIn $user.signInActivity
         if ($null -eq $lastSignIn) {

@@ -3,31 +3,83 @@ function Get-M365TenantSnapshot {
     .SYNOPSIS
         Reads everything the checks need from Microsoft Graph in one pass. Read-only.
     .DESCRIPTION
-        Requires an existing Connect-MgGraph session. Delegated scopes: User.Read.All, AuditLog.Read.All,
-        Organization.Read.All; the signed-in account also needs a reader role such as Global Reader or
-        Reports Reader. signInActivity and the registration report need an Entra ID P1 or P2 license.
+        Requires an existing Connect-MgGraph session.
 
-        The result can be saved with ConvertTo-Json and fed back to Invoke-M365HealthCheck -Snapshot,
-        which is how the tests and the offline demo run without a tenant.
+        Default (Entra ID P1/P2): reads users with signInActivity and the userRegistrationDetails report.
+          Delegated scopes: User.Read.All, AuditLog.Read.All, Organization.Read.All.
+
+        -NoPremium (Entra ID Free): signInActivity and the report are unavailable, so MFA status is built
+          from each enabled user's registered authentication methods (one request per user) and admins are
+          found through directory role assignments. Inactivity cannot be judged; the snapshot says so and
+          Invoke-M365HealthCheck skips those checks.
+          Delegated scopes: User.Read.All, UserAuthenticationMethod.Read.All, RoleManagement.Read.Directory,
+          Organization.Read.All.
+
+        Either way the signed-in account needs a reader role such as Global Reader. The result can be saved
+        with ConvertTo-Json and fed back to Invoke-M365HealthCheck -Snapshot.
     .EXAMPLE
         Connect-MgGraph -Scopes User.Read.All, AuditLog.Read.All, Organization.Read.All
         $snapshot = Get-M365TenantSnapshot
+    .EXAMPLE
+        Connect-MgGraph -Scopes User.Read.All, UserAuthenticationMethod.Read.All, RoleManagement.Read.Directory, Organization.Read.All
+        $snapshot = Get-M365TenantSnapshot -NoPremium
     #>
     [CmdletBinding()]
     [OutputType([pscustomobject])]
-    param()
+    param(
+        [switch]$NoPremium
+    )
 
     $hasGraphSdk = [bool](Get-Command -Name Get-MgContext -ErrorAction SilentlyContinue)
     if (-not $hasGraphSdk -or -not (Get-MgContext)) {
         throw 'Not connected to Microsoft Graph. Install Microsoft.Graph.Authentication and run Connect-MgGraph first (see README for the scopes).'
     }
 
-    $userFields = 'id,userPrincipalName,displayName,userType,accountEnabled,createdDateTime,assignedLicenses,signInActivity'
+    $baseFields = 'id,userPrincipalName,displayName,userType,accountEnabled,createdDateTime,assignedLicenses'
+    $collectedAt = (Get-Date).ToUniversalTime()
+
+    if ($NoPremium) {
+        $users = @(Invoke-GraphCollection -Uri "v1.0/users?`$select=$baseFields")
+
+        $adminIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($assignment in Invoke-GraphCollection -Uri 'v1.0/roleManagement/directory/roleAssignments?$select=principalId') {
+            $null = $adminIds.Add([string]$assignment.principalId)
+        }
+
+        # Disabled accounts are skipped by the MFA check anyway, so don't spend requests on them.
+        $registration = foreach ($user in $users) {
+            if ($user.accountEnabled -ne $true) { continue }
+            $methods = @(Invoke-GraphCollection -Uri "v1.0/users/$($user.id)/authentication/methods")
+            ConvertTo-RegistrationDetail -User $user -Methods $methods -IsAdmin ($adminIds.Contains([string]$user.id))
+        }
+
+        return [pscustomobject]@{
+            CollectedAt             = $collectedAt
+            Source                  = 'AuthenticationMethods'
+            SignInActivityAvailable = $false
+            Users                   = $users
+            RegistrationDetails     = @($registration)
+            SubscribedSkus          = @(Invoke-GraphCollection -Uri 'v1.0/subscribedSkus')
+        }
+    }
+
+    try {
+        $users = @(Invoke-GraphCollection -Uri "v1.0/users?`$select=$baseFields,signInActivity")
+        $registration = @(Invoke-GraphCollection -Uri 'v1.0/reports/authenticationMethods/userRegistrationDetails')
+    }
+    catch {
+        if ("$_" -match 'premium license') {
+            throw "This tenant has no Entra ID P1/P2 license, which sign-in activity and the MFA registration report require. Run again with -NoPremium. Graph said: $_"
+        }
+        throw
+    }
 
     [pscustomobject]@{
-        CollectedAt         = (Get-Date).ToUniversalTime()
-        Users               = @(Invoke-GraphCollection -Uri "v1.0/users?`$select=$userFields")
-        RegistrationDetails = @(Invoke-GraphCollection -Uri 'v1.0/reports/authenticationMethods/userRegistrationDetails')
-        SubscribedSkus      = @(Invoke-GraphCollection -Uri 'v1.0/subscribedSkus')
+        CollectedAt             = $collectedAt
+        Source                  = 'RegistrationReport'
+        SignInActivityAvailable = $true
+        Users                   = $users
+        RegistrationDetails     = $registration
+        SubscribedSkus          = @(Invoke-GraphCollection -Uri 'v1.0/subscribedSkus')
     }
 }

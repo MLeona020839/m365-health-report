@@ -75,6 +75,31 @@ Describe 'Invoke-M365HealthCheck' {
         $html | Should -BeLike '*&lt;script&gt;alert(1)&lt;/script&gt;*'
     }
 
+    Context 'snapshot from Entra ID Free (no sign-in activity)' {
+        BeforeAll {
+            $free = $snapshot | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+            $free.users | ForEach-Object { $_.signInActivity = $null }
+            $free | Add-Member -NotePropertyName SignInActivityAvailable -NotePropertyValue $false
+            $out = Join-Path $TestDrive 'free'
+            $freeFindings = @(Invoke-M365HealthCheck -Snapshot $free -OutputPath $out -WarningVariable warnings -WarningAction SilentlyContinue)
+        }
+
+        It 'does not report every licensed account as never signed in' {
+            $freeFindings.Check | Should -Not -Contain 'LicensedNeverSignedIn'
+            $freeFindings.Check | Should -Not -Contain 'LicensedInactive'
+        }
+
+        It 'still runs the MFA and seat checks' {
+            ($freeFindings | Where-Object Check -EQ 'MfaNotRegistered').Count | Should -Be 4
+            $freeFindings.Check | Should -Contain 'LicensedDisabledAccount'
+        }
+
+        It 'warns, and says in the report which checks were skipped' {
+            $warnings | Should -HaveCount 1
+            Get-Content (Join-Path $out 'm365-health-report.html') -Raw | Should -BeLike '*class="note"*LicensedInactive*'
+        }
+    }
+
     It 'writes a valid report for a healthy tenant' {
         $healthy = [pscustomobject]@{ CollectedAt = '2026-11-01T00:00:00Z'; Users = @(); RegistrationDetails = @(); SubscribedSkus = @() }
         $out = Join-Path $TestDrive 'healthy'

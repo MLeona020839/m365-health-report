@@ -38,6 +38,7 @@ Install-Module Microsoft.Graph.Authentication -Scope CurrentUser
 ./run.ps1 -Connect                     # interactive sign-in, read-only scopes
 ./run.ps1 -Connect -FailOn High        # exit code 1 if any High finding: use it to gate a pipeline
 ./run.ps1 -Connect -InactiveDays 30 -IncludeGuests
+./run.ps1 -Connect -NoPremium          # tenant without Entra ID P1/P2, see below
 ```
 
 Or use the module directly:
@@ -48,17 +49,32 @@ Connect-MgGraph -Scopes User.Read.All, AuditLog.Read.All, Organization.Read.All
 Invoke-M365HealthCheck -OutputPath ./out | Format-Table
 ```
 
+### Entra ID P1/P2 vs. Entra ID Free
+
+`signInActivity` and the MFA registration report require **Entra ID P1 or P2**. On a tenant without them, `-NoPremium` switches to sources that work on Entra ID Free:
+
+| | Default (P1/P2) | `-NoPremium` (Free) |
+| --- | --- | --- |
+| MFA status | `userRegistrationDetails` report, one paged request | Each enabled user's `authentication/methods`, one request per user |
+| Admins | `isAdmin` from the report | Directory role assignments |
+| Seat and disabled-account checks | Yes | Yes |
+| Inactivity checks | Yes | Skipped, and the report says so |
+
+Without the flag on a Free tenant, the tool stops and tells you to add `-NoPremium`. It doesn't report every licensed account as "never signed in". Per-user requests are fine for a lab or a small organisation. For thousands of users, the P1/P2 report is the right source.
+
 ### Permissions
 
-All access is **read-only** and limited to three Graph permissions:
+All access is **read-only**:
 
-| Permission | Why |
-| --- | --- |
-| `User.Read.All` | List users, their licenses and account state |
-| `AuditLog.Read.All` | `signInActivity` on users, and the MFA registration report |
-| `Organization.Read.All` | `subscribedSkus`: purchased vs. consumed seats |
+| Permission | Mode | Why |
+| --- | --- | --- |
+| `User.Read.All` | both | List users, their licenses and account state |
+| `Organization.Read.All` | both | `subscribedSkus`: purchased vs. consumed seats |
+| `AuditLog.Read.All` | P1/P2 | `signInActivity` on users, and the MFA registration report |
+| `UserAuthenticationMethod.Read.All` | Free | Each user's registered authentication methods |
+| `RoleManagement.Read.Directory` | Free | Directory role assignments, to tell admins apart |
 
-With delegated sign-in the account also needs a reader role, such as **Global Reader** or **Reports Reader**. `signInActivity` and the registration report require **Entra ID P1 or P2**.
+With delegated sign-in the account also needs a reader role, such as **Global Reader**.
 
 ## Design decisions
 
@@ -68,7 +84,8 @@ With delegated sign-in the account also needs a reader role, such as **Global Re
 - **Last successful sign-in beats last sign-in.** `lastSignInDateTime` includes failed attempts, so a password-spray against a dormant account would make it look active. The check prefers `lastSuccessfulSignInDateTime` and falls back to the newer of the interactive and non-interactive timestamps only for older data.
 - **New accounts get a grace period.** An account created last week that hasn't signed in isn't idle yet, so it isn't flagged.
 - **The report is treated as untrusted output.** Display names are user-controlled, so every value is HTML-encoded (there is a test for it).
-- **Seeding is kept apart from reporting.** `setup/New-TestTenantData.ps1` writes to the tenant, supports `-WhatIf` and is idempotent. The module itself never writes.
+- **One shape for two data sources.** On Entra ID Free, per-user authentication methods are converted into rows shaped like the registration report. The MFA check is identical in both modes, and only collection differs.
+- **Seeding is kept apart from reporting.** `setup/New-TestTenantData.ps1` writes to the tenant and supports `-WhatIf`. It reconciles rather than just creates, so a run that failed halfway is repaired by running it again, and a second run changes nothing. It is tested against an in-memory fake of the Graph endpoints it uses. The module itself never writes.
 
 ## Limitations
 
@@ -89,7 +106,7 @@ GitHub Actions runs PSScriptAnalyzer and Pester on Ubuntu and Windows for every 
 ## Set up a lab tenant
 
 1. Create a free Azure account. It comes with an Entra ID tenant in which you are Global Administrator.
-2. In the Entra admin center, start the free **Microsoft Entra ID P2** trial (*Billing → Licenses → All products → Try / Buy*). It provides the P1/P2 features the reports need and licenses to assign.
+2. In the Entra admin center, start the free **Microsoft Entra ID P2** trial (*Billing → Licenses → All products → Try / Buy*). It provides the P1/P2 features the reports need and licenses to assign. New tenants are sometimes held for order verification. If so, carry on with Entra ID Free: add `-NoLicense` in step 3 and `-NoPremium` in step 5.
 3. Seed test users that trigger every check:
    ```powershell
    Install-Module Microsoft.Graph.Authentication -Scope CurrentUser
@@ -97,7 +114,7 @@ GitHub Actions runs PSScriptAnalyzer and Pester on Ubuntu and Windows for every 
    ./setup/New-TestTenantData.ps1 -Domain <yourtenant>.onmicrosoft.com
    ```
 4. Sign in as two of the new users and register Microsoft Authenticator at <https://aka.ms/mysecurityinfo>, so the report shows both registered and unregistered accounts.
-5. Run `./run.ps1 -Connect`. The registration report can take some time to reflect new registrations.
+5. Run `./run.ps1 -Connect`. The registration report can take some time to reflect new registrations. In `-NoPremium` mode, authentication methods are read directly, so registrations show up immediately.
 
 Never commit live output: `out/` and `*.snapshot.json` are git-ignored because they contain real names and addresses.
 
