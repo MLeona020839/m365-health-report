@@ -13,7 +13,7 @@
 .EXAMPLE
     ./run.ps1 -Connect -FailOn High
 .EXAMPLE
-    ./run.ps1 -Connect -NoPremium
+    ./run.ps1 -Connect -TenantId yourtenant.onmicrosoft.com -NoPremium
 .EXAMPLE
     ./run.ps1 -Connect -SaveSnapshotPath ./out/tenant.snapshot.json
 #>
@@ -24,6 +24,11 @@ param(
 
     [Parameter(ParameterSetName = 'Live')]
     [switch]$Connect,
+
+    # Tenant to sign in to (domain or id). Needed when the signing-in account is a personal Microsoft
+    # account, which would otherwise land in its own consumer directory.
+    [Parameter(ParameterSetName = 'Live')]
+    [string]$TenantId,
 
     [Parameter(ParameterSetName = 'Live')]
     [switch]$NoPremium,
@@ -50,14 +55,19 @@ if ($PSCmdlet.ParameterSetName -eq 'Offline') {
 }
 else {
     if ($Connect) {
-        Import-Module Microsoft.Graph.Authentication
+        if (-not (Get-Command -Name Connect-MgGraph -ErrorAction SilentlyContinue)) {
+            throw 'Microsoft.Graph.Authentication is not installed. Run: Install-Module Microsoft.Graph.Authentication -Scope CurrentUser'
+        }
         $scopes = if ($NoPremium) {
             'User.Read.All', 'UserAuthenticationMethod.Read.All', 'RoleManagement.Read.Directory', 'Organization.Read.All'
         }
         else {
             'User.Read.All', 'AuditLog.Read.All', 'Organization.Read.All'
         }
-        Connect-MgGraph -Scopes $scopes -NoWelcome
+        # Not $connect: variable names are case-insensitive, so that would overwrite the -Connect switch.
+        $connectArgs = @{ Scopes = $scopes; NoWelcome = $true }
+        if ($TenantId) { $connectArgs.TenantId = $TenantId }
+        Connect-MgGraph @connectArgs
     }
     $snapshot = Get-M365TenantSnapshot -NoPremium:$NoPremium
     if ($SaveSnapshotPath) {

@@ -28,6 +28,8 @@
     Create the users without assigning any license (for tenants without a paid or trial license).
 .EXAMPLE
     ./setup/New-TestTenantData.ps1 -Domain yourname.onmicrosoft.com -WhatIf
+.PARAMETER PassThru
+    Also output each new account as an object with UserPrincipalName and TemporaryPassword.
 .EXAMPLE
     ./setup/New-TestTenantData.ps1 -Domain yourname.onmicrosoft.com -NoLicense
 #>
@@ -40,6 +42,10 @@ param(
     [string]$SkuPartNumber = 'AAD_PREMIUM_P2',
 
     [switch]$NoLicense,
+
+    # Also output the new accounts as objects. The passwords are always printed, one per line, so a
+    # narrow terminal cannot truncate them away the way it truncates a table.
+    [switch]$PassThru,
 
     [ValidatePattern('^[A-Z]{2}$')]
     [string]$UsageLocation = 'NL'
@@ -63,10 +69,36 @@ function Get-RandomPassword {
     (-join $chars) + 'Aa1!'  # guarantees all four character classes
 }
 
+# Reads a user by UPN; $null when it does not exist.
+function Get-ExistingUser([string]$Upn) {
+    try {
+        Invoke-MgGraphRequest -Method GET -OutputType PSObject `
+            -Uri "v1.0/users/$([uri]::EscapeDataString($Upn))?`$select=id,accountEnabled,assignedLicenses"
+    }
+    catch {
+        if ("$_" -match 'Request_ResourceNotFound|NotFound|\b404\b') { return $null }
+        throw
+    }
+}
+
+function Get-GraphPage([string]$Uri) {
+    while ($Uri) {
+        $page = Invoke-MgGraphRequest -Method GET -OutputType PSObject -Uri $Uri
+        $page.value
+        $Uri = $page.'@odata.nextLink'
+    }
+}
+
 if (-not (Get-Command -Name Connect-MgGraph -ErrorAction SilentlyContinue)) {
     throw 'Microsoft.Graph.Authentication is not installed. Run: Install-Module Microsoft.Graph.Authentication -Scope CurrentUser'
 }
-Connect-MgGraph -NoWelcome -Scopes 'User.ReadWrite.All', 'Organization.Read.All', 'RoleManagement.ReadWrite.Directory'
+# -TenantId pins the sign-in to the lab tenant. Without it, the owner's personal Microsoft account signs in
+# to its own consumer directory, where the directory APIs fail with "not supported for MSA accounts".
+Connect-MgGraph -NoWelcome -TenantId $Domain -Scopes 'User.ReadWrite.All', 'Organization.Read.All', 'RoleManagement.ReadWrite.Directory'
+$consumerTenantId = '9188040d-6c67-4c5b-b112-36a304b66dad'
+if ((Get-MgContext).TenantId -eq $consumerTenantId) {
+    throw "Signed in to a personal Microsoft account directory, not to $Domain. Run Disconnect-MgGraph, then run this script again and sign in with an account of $Domain."
+}
 
 $skuId = $null
 if (-not $NoLicense) {
@@ -78,11 +110,14 @@ if (-not $NoLicense) {
     $skuId = $sku.skuId
 }
 
+# A lab tenant has a handful of role assignments, so read them once rather than filtering per user.
+$helpdeskAdminIds = @(Get-GraphPage 'v1.0/roleManagement/directory/roleAssignments?$select=principalId,roleDefinitionId' |
+        Where-Object roleDefinitionId -EQ $helpdeskAdministratorRoleId |
+        ForEach-Object { [string]$_.principalId })
+
 $newAccounts = foreach ($entry in $plan) {
     $upn = "$($entry.Name)@$Domain"
-    $user = @((Invoke-MgGraphRequest -Method GET -OutputType PSObject `
-                -Uri "v1.0/users?`$filter=userPrincipalName eq '$upn'&`$select=id,accountEnabled,assignedLicenses").value) |
-        Select-Object -First 1
+    $user = Get-ExistingUser $upn
     $password = $null
 
     if ($user) {
@@ -112,9 +147,7 @@ $newAccounts = foreach ($entry in $plan) {
     }
 
     if ($entry.Admin) {
-        $roleFilter = "principalId eq '$($user.id)' and roleDefinitionId eq '$helpdeskAdministratorRoleId'"
-        $hasRole = @((Invoke-MgGraphRequest -Method GET -OutputType PSObject `
-                    -Uri "v1.0/roleManagement/directory/roleAssignments?`$filter=$roleFilter").value).Count -gt 0
+        $hasRole = $helpdeskAdminIds -contains [string]$user.id
         if (-not $hasRole -and $PSCmdlet.ShouldProcess($upn, 'Assign Helpdesk Administrator role')) {
             $null = Invoke-MgGraphRequest -Method POST -Uri 'v1.0/roleManagement/directory/roleAssignments' -Body @{
                 principalId      = $user.id
@@ -138,6 +171,9 @@ $newAccounts = foreach ($entry in $plan) {
 if ($newAccounts) {
     Write-Host ''
     Write-Host 'Next: sign in as chris.member and eva.member at https://aka.ms/mysecurityinfo and register Microsoft Authenticator.'
-    Write-Host 'Temporary passwords below are shown once; each must be changed at first sign-in.'
+    Write-Host 'Temporary passwords, shown once; each must be changed at first sign-in:'
+    foreach ($account in $newAccounts) {
+        Write-Host ('  {0}  {1}' -f $account.UserPrincipalName, $account.TemporaryPassword)
+    }
 }
-$newAccounts
+if ($PassThru) { $newAccounts }

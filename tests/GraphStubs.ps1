@@ -15,7 +15,7 @@ function Add-GraphStubs {
         $added += 'Get-MgContext'
     }
     if (-not (Get-Command Connect-MgGraph -ErrorAction SilentlyContinue)) {
-        function global:Connect-MgGraph { [CmdletBinding()] param($Scopes, [switch]$NoWelcome) }
+        function global:Connect-MgGraph { [CmdletBinding()] param($Scopes, $TenantId, [switch]$NoWelcome) }
         $added += 'Connect-MgGraph'
     }
     $added

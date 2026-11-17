@@ -28,9 +28,10 @@ BeforeAll {
             '^GET v1\.0/subscribedSkus$' {
                 return [pscustomobject]@{ value = $t.Skus }
             }
-            "^GET v1\.0/users\?\`$filter=userPrincipalName eq '([^']+)'" {
-                $match = $t.Users[$Matches[1]]
-                return [pscustomobject]@{ value = @(if ($match) { $match }) }
+            "^GET v1\.0/users/([^/?]+)\?\`$select=" {
+                $match = $t.Users[[uri]::UnescapeDataString($Matches[1])]
+                if (-not $match) { throw 'Response status code does not indicate success: NotFound (Not Found). Request_ResourceNotFound' }
+                return $match
             }
             '^POST v1\.0/users$' {
                 $new = [pscustomobject]@{
@@ -45,9 +46,8 @@ BeforeAll {
                 $target.assignedLicenses = @($Body.addLicenses | ForEach-Object { [pscustomobject]@{ skuId = $_.skuId } })
                 return $null
             }
-            "^GET v1\.0/roleManagement/directory/roleAssignments\?\`$filter=principalId eq '([^']+)'" {
-                $principal = $Matches[1]
-                return [pscustomobject]@{ value = @($t.Roles | Where-Object principalId -EQ $principal) }
+            "^GET v1\.0/roleManagement/directory/roleAssignments\?\`$select=" {
+                return [pscustomobject]@{ value = @($t.Roles) }
             }
             '^POST v1\.0/roleManagement/directory/roleAssignments$' {
                 $t.Roles.Add([pscustomobject]$Body)
@@ -74,13 +74,14 @@ AfterAll {
 Describe 'setup/New-TestTenantData.ps1' {
     BeforeEach {
         Mock Connect-MgGraph {}
+        Mock Get-MgContext { [pscustomobject]@{ TenantId = '11111111-2222-3333-4444-555555555555' } }
         Mock Write-Host {}
         Mock Invoke-MgGraphRequest { Invoke-FakeGraph -Method $Method -Uri $Uri -Body $Body }
     }
 
     It 'creates the six users, five licenses, one admin role and one disabled account' {
         Initialize-FakeTenant
-        $accounts = @(& $setupScript -Domain 'lab.test')
+        $accounts = @(& $setupScript -Domain 'lab.test' -PassThru)
 
         $accounts.Count | Should -Be 6
         $accounts.TemporaryPassword | ForEach-Object { $_.Length | Should -BeGreaterOrEqual 20 }
@@ -90,6 +91,14 @@ Describe 'setup/New-TestTenantData.ps1' {
         $global:FakeM365Tenant.Roles[0].principalId | Should -Be 'id-alexadmin'
         $global:FakeM365Tenant.Users['dana.leaver@lab.test'].accountEnabled | Should -BeFalse
         $global:FakeM365Tenant.Users['finn.member@lab.test'].assignedLicenses | Should -BeNullOrEmpty
+    }
+
+    It 'prints each password on its own line, and outputs no objects without -PassThru' {
+        Initialize-FakeTenant
+        $output = & $setupScript -Domain 'lab.test'
+
+        $output | Should -BeNullOrEmpty
+        Should -Invoke Write-Host -Times 6 -Exactly -ParameterFilter { $Object -match '^  \S+@lab\.test  \S{20,}$' }
     }
 
     It 'changes nothing with -WhatIf' {
@@ -103,7 +112,7 @@ Describe 'setup/New-TestTenantData.ps1' {
         $null = & $setupScript -Domain 'lab.test'
         $global:FakeM365Tenant.Writes.Clear()
 
-        $accounts = & $setupScript -Domain 'lab.test'
+        $accounts = & $setupScript -Domain 'lab.test' -PassThru
 
         $accounts | Should -BeNullOrEmpty
         $global:FakeM365Tenant.Writes.Count | Should -Be 0
@@ -113,7 +122,7 @@ Describe 'setup/New-TestTenantData.ps1' {
         Initialize-FakeTenant -ExistingUsers @(
             [pscustomobject]@{ id = 'id-existing'; userPrincipalName = 'bella.member@lab.test'; accountEnabled = $true; assignedLicenses = @() }
         )
-        $accounts = @(& $setupScript -Domain 'lab.test')
+        $accounts = @(& $setupScript -Domain 'lab.test' -PassThru)
 
         $accounts.UserPrincipalName | Should -Not -Contain 'bella.member@lab.test'
         Get-Write 'POST v1.0/users/id-existing/assignLicense' | Should -HaveCount 1
@@ -121,11 +130,25 @@ Describe 'setup/New-TestTenantData.ps1' {
 
     It 'creates users without licenses with -NoLicense, even when the tenant has no SKU' {
         Initialize-FakeTenant -WithoutSku
-        $accounts = @(& $setupScript -Domain 'lab.test' -NoLicense)
+        $accounts = @(& $setupScript -Domain 'lab.test' -NoLicense -PassThru)
 
         $accounts.Count | Should -Be 6
         Get-Write '*assignLicense' | Should -BeNullOrEmpty
         (Get-Write 'POST v1.0/roleManagement/*').Count | Should -Be 1
+    }
+
+    It 'signs in to the tenant named by -Domain, not the account''s home directory' {
+        Initialize-FakeTenant
+        $null = & $setupScript -Domain 'lab.test' -WhatIf
+        Should -Invoke Connect-MgGraph -Times 1 -Exactly -ParameterFilter { $TenantId -eq 'lab.test' }
+    }
+
+    It 'stops before touching anything when signed in to a personal Microsoft account directory' {
+        Initialize-FakeTenant
+        Mock Get-MgContext { [pscustomobject]@{ TenantId = '9188040d-6c67-4c5b-b112-36a304b66dad' } }
+
+        { & $setupScript -Domain 'lab.test' } | Should -Throw '*Disconnect-MgGraph*'
+        Should -Invoke Invoke-MgGraphRequest -Times 0 -Exactly
     }
 
     It 'stops before writing anything, pointing at -NoLicense, when the license is missing' {

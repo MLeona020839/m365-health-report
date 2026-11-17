@@ -39,7 +39,10 @@ Install-Module Microsoft.Graph.Authentication -Scope CurrentUser
 ./run.ps1 -Connect -FailOn High        # exit code 1 if any High finding: use it to gate a pipeline
 ./run.ps1 -Connect -InactiveDays 30 -IncludeGuests
 ./run.ps1 -Connect -NoPremium          # tenant without Entra ID P1/P2, see below
+./run.ps1 -Connect -TenantId <yourtenant>.onmicrosoft.com
 ```
+
+Pass `-TenantId` when you sign in with a personal Microsoft account, for example the one that created an Azure free tenant. Without it, that account lands in its own consumer directory, and Graph answers "not supported for MSA accounts". The tool detects this and stops with a hint.
 
 Or use the module directly:
 
@@ -90,6 +93,7 @@ With delegated sign-in the account also needs a reader role, such as **Global Re
 ## Limitations
 
 - **Registered is not enforced.** A user with a registered method may still sign in without MFA, and one without may be blocked by policy. Whether MFA is *required* depends on Conditional Access or security defaults, which this tool does not evaluate yet.
+- **Accounts from another identity provider.** A tenant created with a personal Microsoft account lists that account as a member with `#EXT#` in its name. Its MFA is handled by the Microsoft account, which Entra ID does not see, so it is reported as `MfaNotRegistered` even when two-step verification is on there.
 - The registration report and sign-in activity are refreshed by Microsoft periodically, not in real time.
 - Inactivity needs history: in a brand-new tenant only the fixture data shows the `LicensedInactive` checks.
 - Group-based license assignment is reported per user, not per group.
@@ -114,7 +118,7 @@ GitHub Actions runs PSScriptAnalyzer and Pester on Ubuntu and Windows for every 
    ./setup/New-TestTenantData.ps1 -Domain <yourtenant>.onmicrosoft.com
    ```
 4. Sign in as two of the new users and register Microsoft Authenticator at <https://aka.ms/mysecurityinfo>, so the report shows both registered and unregistered accounts.
-5. Run `./run.ps1 -Connect`. The registration report can take some time to reflect new registrations. In `-NoPremium` mode, authentication methods are read directly, so registrations show up immediately.
+5. Run `./run.ps1 -Connect -TenantId <yourtenant>.onmicrosoft.com`. The registration report can take some time to reflect new registrations. In `-NoPremium` mode, authentication methods are read directly, so registrations show up immediately.
 
 Never commit live output: `out/` and `*.snapshot.json` are git-ignored because they contain real names and addresses.
 

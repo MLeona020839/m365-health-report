@@ -31,8 +31,13 @@ function Get-M365TenantSnapshot {
     )
 
     $hasGraphSdk = [bool](Get-Command -Name Get-MgContext -ErrorAction SilentlyContinue)
-    if (-not $hasGraphSdk -or -not (Get-MgContext)) {
+    $context = if ($hasGraphSdk) { Get-MgContext }
+    if (-not $context) {
         throw 'Not connected to Microsoft Graph. Install Microsoft.Graph.Authentication and run Connect-MgGraph first (see README for the scopes).'
+    }
+    # The consumer directory of personal Microsoft accounts has no users or licenses to report on.
+    if ($context.TenantId -eq '9188040d-6c67-4c5b-b112-36a304b66dad') {
+        throw 'Signed in to a personal Microsoft account directory, not a work tenant. Run Disconnect-MgGraph, then connect again with -TenantId <yourtenant>.onmicrosoft.com.'
     }
 
     $baseFields = 'id,userPrincipalName,displayName,userType,accountEnabled,createdDateTime,assignedLicenses'

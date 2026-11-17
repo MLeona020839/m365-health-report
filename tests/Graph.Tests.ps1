@@ -36,6 +36,13 @@ Describe 'Get-M365TenantSnapshot' {
         { Get-M365TenantSnapshot } | Should -Throw '*Connect-MgGraph*'
     }
 
+    It 'refuses the consumer directory of personal Microsoft accounts, before calling Graph' {
+        Mock Get-MgContext -ModuleName M365Health { [pscustomobject]@{ TenantId = '9188040d-6c67-4c5b-b112-36a304b66dad' } }
+        Mock Invoke-GraphCollection -ModuleName M365Health { }
+        { Get-M365TenantSnapshot -NoPremium } | Should -Throw '*-TenantId*'
+        Should -Invoke Invoke-GraphCollection -ModuleName M365Health -Times 0 -Exactly
+    }
+
     It 'reads users with sign-in activity, the MFA registration report and the subscribed SKUs' {
         Mock Get-MgContext -ModuleName M365Health { [pscustomobject]@{ TenantId = 'test' } }
         Mock Invoke-GraphCollection -ModuleName M365Health { [pscustomobject]@{ uri = $Uri } }
